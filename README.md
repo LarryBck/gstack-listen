@@ -6,7 +6,7 @@ A [gstack](https://github.com/garrytan/gstack) skill for capturing system audio 
 
 ## Quick start
 
-```bash
+```
 python3 capture.py          # 5 seconds -> captured.wav
 python3 capture.py 10       # 10 seconds -> captured.wav
 python3 capture.py 5 out.wav
@@ -18,24 +18,19 @@ python3 capture.py 5 out.wav
 
 | Environment | Backend | Tool | Status |
 |---|---|---|---|
-| Ubuntu 24.04+ | PipeWire | `pw-record` | Tested |
-| WSL2 Ubuntu | PulseAudio | `parec` | Tested |
+| Ubuntu 24.04+ | PipeWire | `pw-record --target` | Verified |
 | Older Ubuntu / Debian | PulseAudio | `parec` | Supported |
+
+> **Note:** WSL2 is not supported. RDPSink cannot capture Windows system audio.
 
 ## Test results
 
-**PipeWire (Ubuntu 24.04 Live, real hardware):**
+**PipeWire (Ubuntu 24.04, real hardware):**
+
 ```
 PipeWire 1.0.5
 Server Name: PulseAudio (on PipeWire 1.0.5)
-Captured: 574,032 bytes (5 seconds)
-```
-
-**PulseAudio (WSL2 Ubuntu 24.04):**
-```
-Server Name: pulseaudio
-Default Sink: RDPSink, 44100Hz
-Captured: 892,628 bytes (5 seconds)
+pw-record --target 50 → captured and verified with audio playback
 ```
 
 ## Requirements
