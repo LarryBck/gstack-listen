@@ -92,6 +92,37 @@ def get_monitor_source():
     return None
 
 
+def _record_and_check(proc, output_file, duration):
+    """Wait for recording duration, stop process, check output file."""
+    try:
+        time.sleep(duration)
+    except KeyboardInterrupt:
+        pass
+
+    try:
+        proc.send_signal(signal.SIGINT)
+    except ProcessLookupError:
+        pass
+
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        print("WARNING: Process did not stop gracefully, force killed.")
+
+    try:
+        size = os.path.getsize(output_file)
+    except FileNotFoundError:
+        print("ERROR: Output file was not created.")
+        return False
+
+    print("Captured {} -> {} bytes".format(output_file, size))
+    if size <= 44:
+        print("WARNING: Only WAV header captured. No audio was playing.")
+        return False
+    return True
+
+
 def capture_pipewire(output_file, duration):
     """Capture audio using pw-record with --target sink_id."""
     sink_id = get_running_sink_id()
@@ -102,20 +133,13 @@ def capture_pipewire(output_file, duration):
     print("Backend: PipeWire (pw-record --target {})".format(sink_id))
     print("Capturing {} seconds -> {}".format(duration, output_file))
 
-    proc = subprocess.Popen(["pw-record", "--target", sink_id, output_file])
     try:
-        time.sleep(duration)
-    except KeyboardInterrupt:
-        pass
-    proc.send_signal(signal.SIGINT)
-    proc.wait(timeout=5)
-
-    size = os.path.getsize(output_file)
-    print("Captured {} -> {} bytes".format(output_file, size))
-    if size <= 44:
-        print("WARNING: Only WAV header captured. No audio was playing.")
+        proc = subprocess.Popen(["pw-record", "--target", sink_id, output_file])
+    except FileNotFoundError:
+        print("ERROR: pw-record not found. Install PipeWire.")
         return False
-    return True
+
+    return _record_and_check(proc, output_file, duration)
 
 
 def capture_pulseaudio(output_file, duration, monitor_source):
@@ -124,32 +148,30 @@ def capture_pulseaudio(output_file, duration, monitor_source):
     print("Monitor source: {}".format(monitor_source))
     print("Capturing {} seconds -> {}".format(duration, output_file))
 
-    proc = subprocess.Popen([
-        "parec",
-        "--format=s16le",
-        "--rate=48000",
-        "--channels=2",
-        "-d", monitor_source,
-        "--file-format=wav",
-        output_file
-    ])
     try:
-        time.sleep(duration)
-    except KeyboardInterrupt:
-        pass
-    proc.send_signal(signal.SIGINT)
-    proc.wait(timeout=5)
-
-    size = os.path.getsize(output_file)
-    print("Captured {} -> {} bytes".format(output_file, size))
-    if size <= 44:
-        print("WARNING: Only WAV header captured. No audio was playing.")
+        proc = subprocess.Popen([
+            "parec",
+            "--format=s16le",
+            "--rate=48000",
+            "--channels=2",
+            "-d", monitor_source,
+            "--file-format=wav",
+            output_file
+        ])
+    except FileNotFoundError:
+        print("ERROR: parec not found. Install pulseaudio-utils.")
         return False
-    return True
+
+    return _record_and_check(proc, output_file, duration)
 
 
 def main():
-    duration = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    try:
+        duration = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    except ValueError:
+        print("ERROR: Duration must be a number. Usage: capture.py [seconds] [output.wav]")
+        sys.exit(1)
+
     output_file = sys.argv[2] if len(sys.argv) > 2 else "captured.wav"
 
     backend = detect_audio_backend()
@@ -157,6 +179,8 @@ def main():
     if backend is None:
         print("ERROR: No audio backend found. Install PipeWire or PulseAudio.")
         sys.exit(1)
+
+    success = False
 
     if backend == "pipewire":
         success = capture_pipewire(output_file, duration)
